@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useChat } from "@ai-sdk/react";
+import { Fish, LocateFixed, UserRound, Waves } from "lucide-react";
 import {
   Conversation,
   ConversationContent,
@@ -22,6 +23,8 @@ import {
   type ToolPart,
 } from "@/components/ai-elements/tool";
 import FisherProfile from "@/components/fisher-profile";
+import FisherOnboarding from "@/components/fisher-onboarding";
+import OrcaLaunch from "@/components/orca-launch";
 import {
   DEFAULT_DECISION,
   FishingDecisionCard,
@@ -39,6 +42,8 @@ import {
 import { DefaultChatTransport, type UIMessage } from "ai";
 
 const API_URL = process.env.NEXT_PUBLIC_ORCA_API_URL ?? "http://localhost:3001/v1/chat";
+
+type HomeScreen = "launch" | "onboarding" | "chat";
 
 const starterPrompts = [
   "Give me a fishing brief for my next trip",
@@ -176,7 +181,7 @@ function MessageView({ message, language }: { message: UIMessage; language: stri
 
   return (
     <article className={`message ${isUser ? "user" : "assistant"}`}>
-      <span className="message-avatar" aria-hidden="true">{isUser ? "●" : "◒"}</span>
+      <span className="message-avatar" aria-hidden="true">{isUser ? <UserRound size={14} strokeWidth={2} /> : <Fish size={16} strokeWidth={1.8} />}</span>
       <div className="message-bubble">
         {text && <MarkdownContent text={text} />}
         {!isUser && tools.map((part, index) => <ToolActivity key={`${message.id}-tool-${index}`} part={part} />)}
@@ -189,6 +194,7 @@ function MessageView({ message, language }: { message: UIMessage; language: stri
 
 export default function OrcaHome() {
   const [context, setContext] = useState<FisherContext>(DEFAULT_FISHER_CONTEXT);
+  const [screen, setScreen] = useState<HomeScreen>("launch");
   const [hydrated, setHydrated] = useState(false);
   const [locationStatus, setLocationStatus] = useState("");
 
@@ -245,12 +251,21 @@ export default function OrcaHome() {
     if (status === "ready" && text.trim()) sendMessage({ text: text.trim() });
   };
 
+  const completeOnboarding = (next: FisherContext) => {
+    setContext(next);
+    window.localStorage.setItem(FISHER_PROFILE_STORAGE_KEY, JSON.stringify(next));
+    setScreen("chat");
+  };
+
+  if (screen === "launch") return <OrcaLaunch onNext={() => setScreen("onboarding")} />;
+  if (screen === "onboarding") return <FisherOnboarding initialContext={context} onBack={() => setScreen("launch")} onComplete={completeOnboarding} />;
+
   return (
     <main className="orca-shell">
       <div className="orca-frame">
         <header className="topbar">
-          <a className="brand" href="#top" aria-label="Orca home"><span className="brand-mark">◒</span><span><span className="brand-name">orca</span><span className="brand-kicker">field intelligence for fishers</span></span></a>
-          <span className="topbar-note"><span className="status-dot" /> No account required · profile stays on this device</span>
+          <a className="brand" href="#top" aria-label="Orca.ai home"><span className="brand-mark"><Fish size={21} strokeWidth={1.8} /></span><span><span className="brand-name">orca<span className="brand-name-dot">.ai</span></span><span className="brand-kicker">field intelligence for fishers</span></span></a>
+          <span className="topbar-note"><span className="status-dot" /> Your water. Your call.</span>
         </header>
 
         <section className="hero" id="top">
@@ -260,11 +275,11 @@ export default function OrcaHome() {
 
         <div className="workspace">
           <section className="card chat-card" aria-labelledby="chat-title">
-            <div className="chat-header"><div className="chat-title"><span className="agent-avatar" aria-hidden="true">◒</span><div><h2 id="chat-title">Orca fishing desk</h2><p>Ask for conditions, a brief, or a straight go / wait call.</p></div></div><span className={`status-pill ${isWorking ? "is-working" : ""}`}><span className="status-dot" />{isWorking ? "Working" : "Ready"}</span></div>
+            <div className="chat-header"><div className="chat-title"><span className="agent-avatar" aria-hidden="true"><Fish size={20} strokeWidth={1.8} /></span><div><h2 id="chat-title">Orca fishing desk</h2><p>Ask for conditions, a brief, or a straight go / wait call.</p></div></div><span className={`status-pill ${isWorking ? "is-working" : ""}`}><span className="status-dot" />{isWorking ? "Working" : "Ready"}</span></div>
             <div className="chat-body">
               <FishingDecisionCard decision={decision} />
               {messages.length === 0 ? (
-                <div className="empty-chat"><span className="empty-chat-mark" aria-hidden="true">⌁</span><h3>What are you seeing on the water?</h3><p>Tell Orca where and when you fish. The agent will activate relevant tools, show evidence and return a conservative fishing decision.</p><div className="prompt-grid">{starterPrompts.map((prompt) => <button type="button" className="prompt-button" key={prompt} onClick={() => ask(prompt)} disabled={isWorking}>{prompt}</button>)}</div></div>
+                <div className="empty-chat"><span className="empty-chat-mark" aria-hidden="true"><Waves size={26} strokeWidth={1.7} /></span><h3>What are you seeing on the water?</h3><p>Tell Orca where and when you fish. The agent will activate relevant tools, show evidence and return a conservative fishing decision.</p><div className="prompt-grid">{starterPrompts.map((prompt) => <button type="button" className="prompt-button" key={prompt} onClick={() => ask(prompt)} disabled={isWorking}>{prompt}</button>)}</div></div>
               ) : (
                 <Conversation className="message-list" aria-label="Orca fishing conversation"><ConversationContent className="message-content">{messages.map((message) => <MessageView key={message.id} message={message} language={context.language} />)}</ConversationContent><ConversationScrollButton /></Conversation>
               )}
@@ -279,11 +294,10 @@ export default function OrcaHome() {
 
           <aside className="sidebar">
             <FisherProfile context={context} onChange={updateContext} onLocate={locate} locationStatus={locationStatus} onSave={saveProfile} />
-            <section className="card side-card" aria-labelledby="controls-title"><span className="eyebrow">Field controls</span><h2 id="controls-title">Ready for the water</h2><p className="side-card-intro">Set the context once. Every question can then use the right location, water type and vessel details.</p><button type="button" className="control-button" onClick={locate}><span className="control-icon">◎</span><strong>Location</strong><span>{context.location.source === "permission" ? "Current location set" : "Permission or manual"}</span></button><p className="control-note">Your profile is local-only in this no-login version. The server receives it with a request.</p></section>
+            <section className="card side-card" aria-labelledby="controls-title"><span className="eyebrow">Field controls</span><h2 id="controls-title">Ready for the water</h2><p className="side-card-intro">Set the context once. Every question can then use the right location, water type and vessel details.</p><button type="button" className="control-button" onClick={locate}><span className="control-icon"><LocateFixed size={18} strokeWidth={1.9} /></span><strong>Location</strong><span>{context.location.source === "permission" ? "Current location set" : "Permission or manual"}</span></button><p className="control-note">Orca checks each brief against the profile you set above.</p></section>
           </aside>
         </div>
 
-        <footer className="footer-note"><span>Orca is decision support, not a substitute for local seamanship, regulations or a safety check.</span><span>API: {API_URL.replace(/^https?:\/\//, "")}</span></footer>
       </div>
     </main>
   );

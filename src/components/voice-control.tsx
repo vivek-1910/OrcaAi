@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { LoaderCircle, Mic, RotateCcw, Volume2 } from "lucide-react";
 
 type VoiceControlProps = {
   apiUrl: string;
@@ -142,7 +143,7 @@ export function VoiceControl({ apiUrl, language, disabled, onTranscript }: Voice
   return (
     <div className="voice-control">
       <button type="button" className={`control-button ${active ? "is-active" : ""}`} onClick={active ? stop : () => void start()} disabled={disabled} aria-pressed={active}>
-        <span className="control-icon" aria-hidden="true">◉</span>
+        <span className="control-icon" aria-hidden="true"><Mic size={15} strokeWidth={1.9} /></span>
         <strong>{active ? "Stop voice" : "Voice brief"}</strong>
         <span>{status}</span>
       </button>
@@ -212,5 +213,5 @@ export function SpeakResponseButton({ apiUrl, language, text }: { apiUrl: string
     }
   };
 
-  return <button type="button" className={`speak-button ${status === "error" ? "has-error" : ""}`} onClick={() => void speak()} disabled={status === "working"} aria-label={status === "working" ? "Speaking response" : "Speak response"}>{status === "working" ? "Speaking…" : status === "error" ? "Retry voice" : "Speak"}</button>;
+  return <button type="button" className={`speak-button ${status === "error" ? "has-error" : ""}`} onClick={() => void speak()} disabled={status === "working"} aria-label={status === "working" ? "Speaking response" : "Speak response"}>{status === "working" ? <LoaderCircle size={13} className="is-spinning" aria-hidden="true" /> : status === "error" ? <RotateCcw size={13} aria-hidden="true" /> : <Volume2 size={13} aria-hidden="true" />}<span>{status === "working" ? "Speaking…" : status === "error" ? "Retry voice" : "Speak"}</span></button>;
 }

@@ -448,3 +448,54 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .onboarding-next-button span { display: none; }
   .onboarding-next-button { width: 40px; justify-content: center; padding: 0; }
 }
+
+/* Phase artwork sits outside the card and moves with the flow */
+.onboarding-shell { position: relative; }
+.onboarding-phase-art { position: absolute; z-index: 1; inset: 0; overflow: hidden; pointer-events: none; animation-duration: 700ms; animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); animation-fill-mode: both; }
+.onboarding-phase-art.phase-forward { animation-name: phase-art-forward; }
+.onboarding-phase-art.phase-back { animation-name: phase-art-back; }
+.phase-water-split { position: absolute; inset: 0; }
+.phase-asset { position: absolute; overflow: visible; opacity: 0.72; filter: saturate(1.14) contrast(1.03); }
+.phase-asset img { object-fit: contain; object-position: center; }
+.phase-ocean { right: 50%; bottom: -4%; left: -12%; height: 38%; }
+.phase-lake { right: -12%; bottom: -4%; left: 50%; height: 38%; }
+.phase-single { bottom: -5%; width: 62%; height: 44%; }
+.phase-2 .phase-single { left: -7%; }
+.phase-3 .phase-single { right: -8%; }
+.phase-4 .phase-single { left: -8%; width: 68%; }
+@keyframes phase-art-forward { from { opacity: 0; transform: translateX(46px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes phase-art-back { from { opacity: 0; transform: translateX(-46px); } to { opacity: 1; transform: translateX(0); } }
+
+@media (max-width: 900px) {
+  .phase-asset { opacity: 0.64; }
+  .phase-ocean, .phase-lake { bottom: -2%; height: 30%; }
+  .phase-single { bottom: -3%; width: 60%; height: 33%; }
+}
+
+@media (max-width: 600px) {
+  .onboarding-phase-art { opacity: 0.9; }
+  .phase-asset { opacity: 0.52; }
+  .phase-ocean { right: 42%; bottom: 0; left: -42%; height: 23%; }
+  .phase-lake { right: -42%; bottom: 0; left: 42%; height: 23%; }
+  .phase-single { bottom: 0; width: 100%; height: 24%; }
+  .phase-2 .phase-single, .phase-4 .phase-single { left: -20%; }
+  .phase-3 .phase-single { right: -20%; }
+}
+
+/* Phase-specific scale and placement */
+.phase-2 .phase-single { right: auto; bottom: -13%; left: -22%; width: 96%; height: 64%; }
+.phase-3 .phase-full { right: 0; bottom: -3%; left: 0; width: 100%; height: 53%; opacity: 0.62; -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 20%, #000 82%, transparent 100%); mask-image: linear-gradient(to bottom, transparent 0%, #000 20%, #000 82%, transparent 100%); }
+.phase-3 .phase-full img { object-fit: cover; object-position: center; }
+.phase-4 .phase-single { right: auto; bottom: -13%; left: -17%; width: 104%; height: 65%; }
+
+@media (max-width: 900px) {
+  .phase-2 .phase-single { bottom: -9%; left: -22%; width: 110%; height: 53%; }
+  .phase-3 .phase-full { bottom: -2%; height: 43%; opacity: 0.55; }
+  .phase-4 .phase-single { bottom: -10%; left: -20%; width: 116%; height: 54%; }
+}
+
+@media (max-width: 600px) {
+  .phase-2 .phase-single { bottom: -3%; left: -28%; width: 130%; height: 35%; }
+  .phase-3 .phase-full { bottom: 0; height: 29%; opacity: 0.48; }
+  .phase-4 .phase-single { bottom: -3%; left: -30%; width: 135%; height: 36%; }
+}

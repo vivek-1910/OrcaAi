@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import { Anchor, ArrowLeft, ArrowRight, ArrowUpRight, Check, Clock3, Droplets, Fish, LifeBuoy, LocateFixed, Sailboat, Ship, Waves } from "lucide-react";
 import OrcaSelect from "@/components/orca-select";
@@ -105,10 +106,21 @@ export default function FisherOnboarding({ initialContext, onBack, onComplete }:
   };
 
   const stepContentClass = `onboarding-step-content ${direction === "forward" ? "step-forward" : "step-back"}`;
+  const phaseArtClass = `onboarding-phase-art phase-${step} ${direction === "forward" ? "phase-forward" : "phase-back"}`;
 
   return (
     <main className="onboarding-page">
       <div className="onboarding-shell">
+        <div className={phaseArtClass} key={step} aria-hidden="true">
+          {step === 1 ? (
+            <div className="phase-water-split">
+              <div className="phase-asset phase-ocean"><Image src="/images/orca-onboarding-ocean.png" alt="" fill sizes="55vw" /></div>
+              <div className="phase-asset phase-lake"><Image src="/images/orca-onboarding-lake.png" alt="" fill sizes="55vw" /></div>
+            </div>
+          ) : (
+            <div className={`phase-asset ${step === 3 ? "phase-full" : "phase-single"}`}><Image src={step === 2 ? "/images/orca-onboarding-location.png" : step === 3 ? "/images/orca-onboarding-setup-wide.png" : "/images/orca-onboarding-brief.png"} alt="" fill sizes="80vw" /></div>
+          )}
+        </div>
         <header className="onboarding-toolbar">
           {step === 1 ? (
             <button type="button" className="onboarding-brand-home" onClick={onBack} aria-label="Back to Orca.ai launch page">

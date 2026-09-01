@@ -486,16 +486,17 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .phase-2 .phase-single { right: auto; bottom: -18%; left: -34%; width: 124%; height: 80%; }
 .phase-3 .phase-full { right: 0; bottom: -3%; left: 0; width: 100%; height: 53%; opacity: 0.62; -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 20%, #000 82%, transparent 100%); mask-image: linear-gradient(to bottom, transparent 0%, #000 20%, #000 82%, transparent 100%); }
 .phase-3 .phase-full img { object-fit: cover; object-position: center; }
-.phase-4 .phase-single { right: 0; bottom: -13%; left: 0; width: 100%; height: 68%; }
+.phase-4 .phase-single { right: auto; bottom: -13%; left: 0; width: 94%; height: 68%; }
+.phase-4 .phase-single img { object-position: left center; }
 
 @media (max-width: 900px) {
   .phase-2 .phase-single { bottom: -13%; left: -35%; width: 142%; height: 70%; }
   .phase-3 .phase-full { bottom: -2%; height: 43%; opacity: 0.55; }
-  .phase-4 .phase-single { right: 0; bottom: -10%; left: 0; width: 100%; height: 58%; }
+  .phase-4 .phase-single { right: auto; bottom: -10%; left: 0; width: 96%; height: 58%; }
 }
 
 @media (max-width: 600px) {
   .phase-2 .phase-single { bottom: -5%; left: -48%; width: 172%; height: 45%; }
   .phase-3 .phase-full { bottom: 0; height: 29%; opacity: 0.48; }
-  .phase-4 .phase-single { right: 0; bottom: -3%; left: 0; width: 100%; height: 40%; }
+  .phase-4 .phase-single { right: auto; bottom: -3%; left: 0; width: 100%; height: 40%; }
 }

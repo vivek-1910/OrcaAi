@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import { Anchor, ArrowLeft, ArrowRight, ArrowUpRight, Check, Clock3, Droplets, Fish, LifeBuoy, LocateFixed, Sailboat, Ship, Waves } from "lucide-react";
+import OrcaDateTimePicker from "@/components/orca-date-time-picker";
 import OrcaSelect from "@/components/orca-select";
 import {
   type Experience,
@@ -25,20 +26,6 @@ const experienceOptions = [
 ];
 const totalSteps = 4;
 const stepTitles = ["Your water", "Your location", "Your setup", "Your brief"];
-
-function localDateTimeValue(value: string | undefined): string {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const pad = (part: number) => String(part).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-function isoDateTimeValue(value: string): string | undefined {
-  if (!value) return undefined;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
-}
 
 function hasLocation(context: FisherContext): boolean {
   return context.location.source !== "unset"
@@ -185,7 +172,10 @@ export default function FisherOnboarding({ initialContext, onBack, onComplete }:
               <div className="onboarding-brief-step">
                 <label className="onboarding-field"><span className="input-label">Preferred language</span><OrcaSelect ariaLabel="Preferred language" value={draft.language} options={languageOptions.map((language) => ({ value: language, label: language }))} onValueChange={(value) => update({ language: value })} /></label>
                 <div className="onboarding-field"><span className="input-label">Usual trip timing</span><div className="timing-grid">{([ ["early-morning", "Early morning", "Before the first light"], ["day", "Day trip", "Out with the sun"], ["evening", "Evening", "Late water, long shadows"], ["overnight", "Overnight", "For the longer run"] ] as Array<[TripTiming, string, string]>).map(([value, title, detail]) => <button type="button" key={value} className={`timing-choice ${draft.tripTiming === value ? "is-selected" : ""}`} onClick={() => update({ tripTiming: value })} aria-pressed={draft.tripTiming === value}><Clock3 size={16} strokeWidth={1.8} aria-hidden="true" /><strong>{title}</strong><small>{detail}</small></button>)}</div></div>
-                <div className="onboarding-form-row"><label className="onboarding-field"><span className="input-label">Planned departure</span><input className="field" type="datetime-local" value={localDateTimeValue(draft.departureAt)} onChange={(event) => update({ departureAt: isoDateTimeValue(event.target.value) })} /></label><label className="onboarding-field"><span className="input-label">Expected return</span><input className="field" type="datetime-local" value={localDateTimeValue(draft.returnAt)} onChange={(event) => update({ returnAt: isoDateTimeValue(event.target.value) })} /></label></div>
+                <div className="onboarding-form-row onboarding-date-row">
+                  <div className="onboarding-field"><span className="input-label">Planned departure</span><OrcaDateTimePicker id="departure-at" label="Planned departure" value={draft.departureAt} onChange={(value) => update({ departureAt: value })} /></div>
+                  <div className="onboarding-field"><span className="input-label">Expected return</span><OrcaDateTimePicker id="return-at" label="Expected return" value={draft.returnAt} onChange={(value) => update({ returnAt: value })} /></div>
+                </div>
               </div>
             )}
           </div>

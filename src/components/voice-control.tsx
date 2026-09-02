@@ -15,9 +15,18 @@ type AudioRuntime = {
   context: AudioContext;
   processor: ScriptProcessorNode;
   source: MediaStreamAudioSourceNode;
+  sink: GainNode;
   stream: MediaStream;
   socket: WebSocket;
 };
+
+let activeSpeechStop: (() => void) | null = null;
+
+function stopActiveSpeech(): void {
+  const stop = activeSpeechStop;
+  activeSpeechStop = null;
+  stop?.();
+}
 
 function apiRoot(apiUrl: string): string {
   return apiUrl.replace(/\/v1\/chat\/?$/, "");
@@ -72,6 +81,7 @@ export function VoiceControl({ apiUrl, language, disabled, onTranscript }: Voice
       current.socket.close();
       current.processor.disconnect();
       current.source.disconnect();
+      current.sink.disconnect();
       current.stream.getTracks().forEach((track) => track.stop());
       void current.context.close();
     }
@@ -97,14 +107,20 @@ export function VoiceControl({ apiUrl, language, disabled, onTranscript }: Voice
       const context = new AudioContext({ sampleRate: 16_000 });
       const source = context.createMediaStreamSource(stream);
       const processor = context.createScriptProcessor(4096, 1, 1);
-      const nextRuntime: AudioRuntime = { context, processor, source, stream, socket };
+      const sink = context.createGain();
+      sink.gain.value = 0;
+      const nextRuntime: AudioRuntime = { context, processor, source, sink, stream, socket };
       runtime.current = nextRuntime;
 
       socket.onopen = () => {
+        void context.resume();
         setActive(true);
         setStatus("Listening… speak naturally");
         source.connect(processor);
-        processor.connect(context.destination);
+        // ScriptProcessorNode must be connected to run, but never route the
+        // microphone back to the user's speakers.
+        processor.connect(sink);
+        sink.connect(context.destination);
       };
       socket.onmessage = (event) => {
         try {
@@ -118,8 +134,9 @@ export function VoiceControl({ apiUrl, language, disabled, onTranscript }: Voice
             setInterim("");
             setStatus("Sending your question…");
             onTranscript(message.text.trim());
+            stop();
           }
-          if (message.type === "error") setStatus(message.message ?? "Voice provider unavailable");
+          if (message.type === "error" || message.event === "error") setStatus(message.message ?? "Voice provider unavailable");
         } catch {
           setStatus("Could not read the voice response");
         }
@@ -187,57 +204,145 @@ function decodeBase64(value: string): Uint8Array {
   return bytes;
 }
 
+function copyToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
 export function SpeakResponseButton({ apiUrl, language, text }: { apiUrl: string; language: string; text: string }) {
   const [status, setStatus] = useState<"idle" | "working" | "error">("idle");
+  const speakingRef = useRef(false);
+  const localSpeechStopRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => () => {
+    localSpeechStopRef.current?.();
+  }, []);
 
   const speak = async () => {
-    if (!text.trim() || status === "working") return;
+    if (!text.trim() || speakingRef.current) return;
+    stopActiveSpeech();
+    speakingRef.current = true;
     setStatus("working");
+    let cancelled = false;
+    let socket: WebSocket | null = null;
+    let audioContext: AudioContext | null = null;
+    let sourceNode: AudioBufferSourceNode | null = null;
+    let rejectStream: ((reason?: unknown) => void) | null = null;
+    const abortController = new AbortController();
+    const stop = () => {
+      if (cancelled) return;
+      cancelled = true;
+      abortController.abort();
+      rejectStream?.(new Error("Speech stopped"));
+      rejectStream = null;
+      if (sourceNode) {
+        try { sourceNode.stop(); } catch { }
+        sourceNode.disconnect();
+        sourceNode = null;
+      }
+      if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) socket.close(1000, "speech stopped");
+      if (audioContext && audioContext.state !== "closed") void audioContext.close();
+    };
+    localSpeechStopRef.current = stop;
+    activeSpeechStop = stop;
+
     try {
+      if (typeof window.AudioContext === "function") {
+        audioContext = new AudioContext();
+        // Resume inside the click flow so later async TTS bytes are allowed to
+        // play by browsers that gate media behind a user gesture.
+        await audioContext.resume();
+      }
+
       const translatedResponse = await fetch(`${apiRoot(apiUrl)}/v1/voice/translate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abortController.signal,
         body: JSON.stringify({ text: text.slice(0, 2000), language }),
       });
       if (!translatedResponse.ok) throw new Error("Translation unavailable");
       const translated = (await translatedResponse.json()) as { text?: string; language?: string };
       if (!translated.text) throw new Error("Empty translation");
+      if (cancelled) return;
 
-      await new Promise<void>((resolve, reject) => {
-        const socket = new WebSocket(`${websocketUrl(apiUrl, "/v1/voice/tts")}?language=${encodeURIComponent(language)}`);
+      const audioBytes = await new Promise<Uint8Array>((resolve, reject) => {
+        rejectStream = reject;
+        socket = new WebSocket(`${websocketUrl(apiUrl, "/v1/voice/tts")}?language=${encodeURIComponent(language)}`);
         const chunks: Uint8Array[] = [];
         let sent = false;
+        let settled = false;
+        const fail = (error: Error) => {
+          if (settled) return;
+          settled = true;
+          reject(error);
+        };
+        socket.binaryType = "arraybuffer";
         socket.onopen = () => setStatus("working");
         socket.onmessage = (event) => {
           try {
-            const message = JSON.parse(String(event.data)) as { type?: string; data?: { audio?: string }; message?: string };
+            const message = JSON.parse(String(event.data)) as { type?: string; event?: string; data?: { audio?: string }; message?: string };
             if (message.type === "ready" && !sent) {
               sent = true;
-              socket.send(JSON.stringify({ type: "text", text: translated.text }));
-              socket.send(JSON.stringify({ type: "flush" }));
+              socket?.send(JSON.stringify({ type: "text", text: translated.text }));
+              socket?.send(JSON.stringify({ type: "flush" }));
             }
             if (message.type === "audio" && message.data?.audio) chunks.push(decodeBase64(message.data.audio));
-            if (message.type === "error") reject(new Error(message.message ?? "TTS unavailable"));
+            if (message.type === "error" || message.event === "error") fail(new Error(message.message ?? "TTS unavailable"));
           } catch (error) {
-            reject(error instanceof Error ? error : new Error("Invalid audio response"));
+            fail(error instanceof Error ? error : new Error("Invalid audio response"));
           }
         };
-        socket.onerror = () => reject(new Error("TTS connection failed"));
+        socket.onerror = () => fail(new Error("TTS connection failed"));
         socket.onclose = () => {
-          if (chunks.length) {
-            const blob = new Blob(chunks as BlobPart[], { type: "audio/mpeg" });
-            const url = URL.createObjectURL(blob);
-            const audio = new Audio(url);
-            audio.onended = () => URL.revokeObjectURL(url);
-            void audio.play().then(resolve).catch(reject);
-          } else {
-            reject(new Error("No audio received"));
-          }
+          if (settled) return;
+          if (cancelled) return fail(new Error("Speech stopped"));
+          if (!chunks.length) return fail(new Error("No audio received"));
+          settled = true;
+          const totalLength = chunks.reduce((total, chunk) => total + chunk.byteLength, 0);
+          const bytes = new Uint8Array(totalLength);
+          let offset = 0;
+          chunks.forEach((chunk) => {
+            bytes.set(chunk, offset);
+            offset += chunk.byteLength;
+          });
+          rejectStream = null;
+          resolve(bytes);
         };
       });
-      setStatus("idle");
+      rejectStream = null;
+      if (cancelled) return;
+
+      if (audioContext) {
+        const decoded = await audioContext.decodeAudioData(copyToArrayBuffer(audioBytes));
+        await new Promise<void>((resolve, reject) => {
+          if (!audioContext || cancelled) return reject(new Error("Speech stopped"));
+          sourceNode = audioContext.createBufferSource();
+          sourceNode.buffer = decoded;
+          sourceNode.connect(audioContext.destination);
+          sourceNode.onended = () => resolve();
+          try { sourceNode.start(); } catch (error) { reject(error instanceof Error ? error : new Error("Audio playback failed")); }
+        });
+      } else {
+        const blob = new Blob([copyToArrayBuffer(audioBytes)], { type: "audio/mpeg" });
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        await new Promise<void>((resolve, reject) => {
+          audio.onended = () => resolve();
+          audio.onerror = () => reject(new Error("Audio playback failed"));
+          void audio.play().then(() => undefined).catch(reject);
+        });
+        URL.revokeObjectURL(url);
+      }
+      if (!cancelled) setStatus("idle");
     } catch {
-      setStatus("error");
+      if (!cancelled) setStatus("error");
+    }
+    finally {
+      if (activeSpeechStop === stop) activeSpeechStop = null;
+      if (localSpeechStopRef.current === stop) localSpeechStopRef.current = null;
+      if (audioContext && audioContext.state !== "closed") void audioContext.close();
+      speakingRef.current = false;
     }
   };
 

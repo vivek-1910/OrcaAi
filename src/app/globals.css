@@ -906,3 +906,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 @media (max-width: 600px) {
   .onboarding-date-popover { width: min(330px, calc(100vw - 24px)); }
 }
+/* Keep the message column from duplicating the open history rail. */
+.chat-layout:not(.is-collapsed) .chat-main-column .chat-brand,
+.chat-layout:not(.is-collapsed) .chat-main-column .chat-current-title { display: none; }
+.chat-layout.is-collapsed .chat-main-column .chat-brand-mark { display: none; }

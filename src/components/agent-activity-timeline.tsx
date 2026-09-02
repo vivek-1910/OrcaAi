@@ -20,7 +20,7 @@ import {
   Waves,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 type ActivityPart = {
   type?: unknown;
@@ -210,7 +210,9 @@ export default function AgentActivityTimeline({
         className="agent-activity-summary"
         type="button"
         aria-expanded={open}
-        onClick={() => setManualOpen((current) => !current)}
+        onClick={() => {
+          if (!isWorking) setManualOpen((current) => !current);
+        }}
       >
         <span className="agent-activity-summary-icon" aria-hidden="true">
           {failed ? <Siren size={17} strokeWidth={1.9} /> : isWorking ? <LoaderCircle className="agent-activity-spin" size={18} strokeWidth={1.9} /> : <CheckCircle2 size={18} strokeWidth={1.9} />}

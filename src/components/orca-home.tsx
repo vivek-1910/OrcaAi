@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import { useChat } from "@ai-sdk/react";
 import Link from "next/link";
-import { ArrowUp, Fish, PanelLeftClose, PanelLeftOpen, Settings2, Square, UserRound } from "lucide-react";
+import { ArrowUp, CircleAlert, CircleCheck, Fish, PanelLeftClose, PanelLeftOpen, Settings2, ShieldCheck, Square, TriangleAlert, UserRound } from "lucide-react";
 import {
   Conversation,
   ConversationContent,
@@ -38,6 +38,21 @@ const EMPTY_MESSAGES: UIMessage[] = [];
 const currentTimeMs = () => Date.now();
 
 type HomeScreen = "launch" | "onboarding" | "chat";
+
+type FishingAssessmentSnapshot = {
+  decision: "GO" | "CAUTION" | "NO_GO" | "UNKNOWN";
+  title?: string;
+  detail?: string;
+  locationLabel?: string;
+  missingData?: string[];
+  blockingReasons?: string[];
+  metrics?: {
+    maxWindKph?: number | null;
+    maxGustKph?: number | null;
+    maxWaveHeightM?: number | null;
+    maxSwellHeightM?: number | null;
+  };
+};
 
 const starterPrompts = [
   "Can I go fishing today?",
@@ -88,6 +103,50 @@ function SourceLinks({ parts, outputs = [] }: { parts: unknown[]; outputs?: unkn
 
 function messageText(message: UIMessage): string {
   return message.parts.filter((part) => part.type === "text").map((part) => part.text).join("\n");
+}
+
+function assessmentFromMessage(message: UIMessage): FishingAssessmentSnapshot | null {
+  const candidate = recordValue(message.metadata, "fishingAssessment");
+  if (!candidate || typeof candidate !== "object") return null;
+  const assessment = candidate as Record<string, unknown>;
+  const decision = String(assessment.decision ?? "");
+  if (!["GO", "CAUTION", "NO_GO", "UNKNOWN"].includes(decision)) return null;
+  return {
+    decision: decision as FishingAssessmentSnapshot["decision"],
+    title: typeof assessment.title === "string" ? assessment.title : undefined,
+    detail: typeof assessment.detail === "string" ? assessment.detail : undefined,
+    locationLabel: typeof assessment.locationLabel === "string" ? assessment.locationLabel : undefined,
+    missingData: Array.isArray(assessment.missingData) ? assessment.missingData.filter((item): item is string => typeof item === "string") : undefined,
+    blockingReasons: Array.isArray(assessment.blockingReasons) ? assessment.blockingReasons.filter((item): item is string => typeof item === "string") : undefined,
+    metrics: assessment.metrics && typeof assessment.metrics === "object" ? assessment.metrics as FishingAssessmentSnapshot["metrics"] : undefined,
+  };
+}
+
+function metricLabel(value: number | null | undefined, suffix: string): string | null {
+  return typeof value === "number" && Number.isFinite(value) ? `${value}${suffix}` : null;
+}
+
+function FishingVerdict({ assessment }: { assessment: FishingAssessmentSnapshot }) {
+  const decisionLabel = assessment.decision === "NO_GO" ? "NO-GO" : assessment.decision.replace("_", "-");
+  const Icon = assessment.decision === "GO" ? CircleCheck : assessment.decision === "NO_GO" ? CircleAlert : assessment.decision === "CAUTION" ? TriangleAlert : ShieldCheck;
+  const metrics = [
+    metricLabel(assessment.metrics?.maxWindKph, " km/h wind"),
+    metricLabel(assessment.metrics?.maxWaveHeightM, " m waves"),
+    metricLabel(assessment.metrics?.maxSwellHeightM, " m swell"),
+  ].filter((value): value is string => Boolean(value));
+  const caveat = assessment.missingData?.length ? `Missing: ${assessment.missingData.join(", ")}.` : null;
+
+  return (
+    <section className={`fishing-verdict is-${assessment.decision.toLowerCase()}`} aria-label={`Authoritative fishing decision: ${decisionLabel}`}>
+      <div className="fishing-verdict-topline">
+        <span className="fishing-verdict-icon" aria-hidden="true"><Icon size={16} strokeWidth={2} /></span>
+        <div className="fishing-verdict-heading"><span>Safety engine · {assessment.locationLabel || "Current fishing location"}</span><strong>{assessment.title || "Fishing readiness result"}</strong></div>
+        <b>{decisionLabel}</b>
+      </div>
+      {assessment.detail && <p>{assessment.detail}</p>}
+      {(metrics.length > 0 || caveat) && <div className="fishing-verdict-meta">{metrics.map((metric) => <span key={metric}>{metric}</span>)}{caveat && <span>{caveat}</span>}</div>}
+    </section>
+  );
 }
 
 type StoredChat = {
@@ -162,6 +221,7 @@ function MessageView({ message, language, isWorking, elapsedMs }: { message: UIM
   const isUser = message.role === "user";
   const text = messageText(message);
   const parts = message.parts as unknown[];
+  const assessment = !isUser ? assessmentFromMessage(message) : null;
   const tools = parts.filter((part) => {
     const type = String(recordValue(part, "type") ?? "");
     return type === "dynamic-tool" || type.startsWith("tool-");
@@ -174,6 +234,7 @@ function MessageView({ message, language, isWorking, elapsedMs }: { message: UIM
     <article className={`message ${isUser ? "user" : "assistant"}`}>
       <span className="message-avatar" aria-hidden="true">{isUser ? <UserRound size={14} strokeWidth={2} /> : <Fish size={16} strokeWidth={1.8} />}</span>
       <div className="message-bubble">
+        {assessment && <FishingVerdict assessment={assessment} />}
         {!isUser && <AgentActivityTimeline parts={parts} isWorking={isWorking} elapsedMs={elapsedMs} error={toolError} placeholder={isWorking && tools.length === 0} />}
         {text && <MarkdownContent text={text} />}
         {!isUser && <SourceLinks parts={parts} outputs={tools.map((part) => recordValue(part, "output"))} />}
@@ -272,12 +333,6 @@ export default function OrcaHome() {
     updateElapsed();
     const timer = window.setInterval(updateElapsed, 1000);
     return () => window.clearInterval(timer);
-  }, [isWorking, requestStartedAt]);
-
-  useEffect(() => {
-    if (!isWorking && requestStartedAt) {
-      setRequestElapsedMs(Math.max(0, Date.now() - requestStartedAt));
-    }
   }, [isWorking, requestStartedAt]);
 
   useEffect(() => {

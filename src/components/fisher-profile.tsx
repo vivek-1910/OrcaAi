@@ -17,6 +17,7 @@ type FisherProfileProps = {
   onLocate: () => void;
   locationStatus: string;
   onSave: () => void;
+  isLocating?: boolean;
 };
 
 const languageOptions = ["English", "Hindi", "Kannada", "Tamil", "Malayalam", "Telugu", "Bengali", "Marathi", "Gujarati", "Odia", "Punjabi"];
@@ -38,7 +39,7 @@ function isoDateTimeValue(value: string): string | undefined {
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }
 
-export default function FisherProfile({ context, onChange, onLocate, locationStatus, onSave }: FisherProfileProps) {
+export default function FisherProfile({ context, onChange, onLocate, locationStatus, onSave, isLocating = false }: FisherProfileProps) {
   const [editing, setEditing] = useState(true);
   const [saved, setSaved] = useState(false);
 
@@ -66,7 +67,7 @@ export default function FisherProfile({ context, onChange, onLocate, locationSta
             {(["marine", "inland"] as WaterMode[]).map((mode) => <button key={mode} type="button" className={`control-button ${context.waterMode === mode ? "is-active" : ""}`} onClick={() => update({ waterMode: mode })} aria-pressed={context.waterMode === mode}><span className="control-icon">{mode === "marine" ? <Waves size={18} strokeWidth={1.9} /> : <Droplets size={18} strokeWidth={1.9} />}</span><strong>{mode === "marine" ? "Marine" : "Inland"}</strong><span>{mode === "marine" ? "Coast, sea, offshore" : "River, lake, reservoir"}</span></button>)}
           </div></div>
 
-          <div className="form-group"><span className="input-label">Where are you fishing?</span><div className="location-actions"><button type="button" className="secondary-button" onClick={onLocate}><LocateFixed size={15} strokeWidth={1.9} /> Use current location</button><input className="location-input" aria-label="Harbour or waterbody" value={context.location.source === "manual" ? context.location.label : ""} onChange={(event) => update({ location: { source: "manual", label: event.target.value } })} placeholder="Harbour or waterbody" /></div><p className="location-status" aria-live="polite">{locationStatus || context.location.label}</p></div>
+          <div className="form-group"><span className="input-label">Where are you fishing?</span><div className="location-actions"><button type="button" className="secondary-button" onClick={onLocate} disabled={isLocating}><LocateFixed size={15} strokeWidth={1.9} /> {isLocating ? "Finding location…" : "Use current location"}</button><input className="location-input" aria-label="Harbour or waterbody" value={context.location.source === "manual" ? context.location.label : ""} onChange={(event) => update({ location: { source: "manual", label: event.target.value } })} placeholder="Harbour or waterbody" /></div><p className="location-status" aria-live="polite">{locationStatus || context.location.label}</p></div>
 
           <div className="form-row"><label className="form-group"><span className="input-label">Language</span><OrcaSelect ariaLabel="Language" value={context.language} options={languageOptions.map((language) => ({ value: language, label: language }))} onValueChange={(value) => update({ language: value })} /></label><label className="form-group"><span className="input-label">Experience</span><OrcaSelect ariaLabel="Experience" value={context.experience} options={experienceOptions} onValueChange={(value) => update({ experience: value as Experience })} /></label></div>
 

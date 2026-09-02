@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Anchor, ArrowLeft, ArrowRight, ArrowUpRight, Check, Clock3, Droplets, Fish, LifeBuoy, LocateFixed, Sailboat, Ship, Waves } from "lucide-react";
 import OrcaDateTimePicker from "@/components/orca-date-time-picker";
 import OrcaSelect from "@/components/orca-select";
+import { locationErrorMessage, requestBrowserLocation } from "@/lib/browser-location";
 import {
   type Experience,
   type FisherContext,
@@ -47,6 +48,7 @@ export default function FisherOnboarding({ initialContext, onBack, onComplete }:
   const [direction, setDirection] = useState<"forward" | "back">("forward");
   const [error, setError] = useState("");
   const [locationStatus, setLocationStatus] = useState("");
+  const [isLocating, setIsLocating] = useState(false);
 
   const update = (patch: Partial<FisherContext>) => setDraft((current) => ({ ...current, ...patch }));
   const updateVessel = (patch: Partial<FisherContext["vessel"]>) => setDraft((current) => ({ ...current, vessel: { ...current.vessel, ...patch } }));
@@ -56,27 +58,28 @@ export default function FisherOnboarding({ initialContext, onBack, onComplete }:
   };
 
   const requestLocation = () => {
-    if (!navigator.geolocation) {
-      setLocationStatus("Location is unavailable here. Enter a harbour or waterbody instead.");
-      return;
-    }
+    if (isLocating) return;
+    setIsLocating(true);
     setLocationStatus("Finding your current location…");
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
+    void requestBrowserLocation().then(
+      ({ latitude, longitude }) => {
         setDraft((current) => ({
           ...current,
           location: {
             source: "permission",
             label: "Current fishing location",
-            latitude: coords.latitude,
-            longitude: coords.longitude,
+            latitude,
+            longitude,
           },
         }));
+        setIsLocating(false);
         setLocationStatus("Location ready. Orca can now tailor the brief to this spot.");
         setError("");
       },
-      () => setLocationStatus("Location was not shared. Add a harbour or waterbody manually."),
-      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 300_000 },
+      (locationError) => {
+        setIsLocating(false);
+        setLocationStatus(locationErrorMessage(locationError));
+      },
     );
   };
 
@@ -166,7 +169,7 @@ export default function FisherOnboarding({ initialContext, onBack, onComplete }:
 
             {step === 2 && (
               <div className="onboarding-location-step">
-                <button type="button" className={`location-hero-button ${draft.location.source === "permission" ? "is-selected" : ""}`} onClick={requestLocation}><span className="location-hero-icon"><LocateFixed size={20} strokeWidth={1.9} /></span><span><strong>{draft.location.source === "permission" ? "Current location selected" : "Use my current location"}</strong><small>{draft.location.source === "permission" ? "Ready for this fishing brief" : "For the most accurate local brief"}</small></span><span className="location-hero-arrow"><ArrowUpRight size={18} strokeWidth={2} /></span></button>
+                <button type="button" className={`location-hero-button ${draft.location.source === "permission" ? "is-selected" : ""}`} onClick={requestLocation} disabled={isLocating}><span className="location-hero-icon"><LocateFixed size={20} strokeWidth={1.9} /></span><span><strong>{isLocating ? "Finding your location…" : draft.location.source === "permission" ? "Current location selected" : "Use my current location"}</strong><small>{draft.location.source === "permission" ? "Ready for this fishing brief" : "For the most accurate local brief"}</small></span><span className="location-hero-arrow"><ArrowUpRight size={18} strokeWidth={2} /></span></button>
                 <div className="or-divider"><span>or enter it manually</span></div>
                 <label className="onboarding-field"><span className="input-label">Harbour or waterbody</span><input className="field onboarding-field-input" aria-label="Harbour or waterbody" value={draft.location.label === "Add a harbour or waterbody" ? "" : draft.location.label} onChange={(event) => update({ location: { source: "manual", label: event.target.value } })} placeholder={draft.waterMode === "marine" ? "e.g. Mangaluru harbour" : "e.g. Kabini reservoir"} /></label>
                 <p className="onboarding-location-status" aria-live="polite">{locationStatus || (hasLocation(draft) ? `Using ${draft.location.label}.` : "We need a location to check live conditions.")}</p>

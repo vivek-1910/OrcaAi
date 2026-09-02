@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Fish, Settings2 } from "lucide-react";
 import FisherProfile from "@/components/fisher-profile";
+import { locationErrorMessage, requestBrowserLocation } from "@/lib/browser-location";
 import {
   DEFAULT_FISHER_CONTEXT,
   FISHER_PROFILE_STORAGE_KEY,
@@ -15,6 +16,7 @@ export default function FisherSettings() {
   const [context, setContext] = useState<FisherContext>(DEFAULT_FISHER_CONTEXT);
   const [hydrated, setHydrated] = useState(false);
   const [locationStatus, setLocationStatus] = useState("");
+  const [isLocating, setIsLocating] = useState(false);
 
   useEffect(() => {
     const loadProfile = window.setTimeout(() => {
@@ -42,18 +44,19 @@ export default function FisherSettings() {
   };
 
   const locate = () => {
-    if (!navigator.geolocation) {
-      setLocationStatus("Location is unavailable here. Enter a harbour or waterbody instead.");
-      return;
-    }
+    if (isLocating) return;
+    setIsLocating(true);
     setLocationStatus("Requesting your location…");
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        updateContext({ ...context, location: { source: "permission", label: "Current fishing location", latitude: coords.latitude, longitude: coords.longitude } });
+    void requestBrowserLocation().then(
+      ({ latitude, longitude }) => {
+        updateContext({ ...context, location: { source: "permission", label: "Current fishing location", latitude, longitude } });
+        setIsLocating(false);
         setLocationStatus("Current location ready.");
       },
-      () => setLocationStatus("Location was not shared. Add a harbour or waterbody manually."),
-      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 300_000 },
+      (locationError) => {
+        setIsLocating(false);
+        setLocationStatus(locationErrorMessage(locationError));
+      },
     );
   };
 
@@ -73,7 +76,7 @@ export default function FisherSettings() {
         </section>
 
         <section className="settings-card" aria-label="Fishing profile settings">
-          <FisherProfile context={context} onChange={updateContext} onLocate={locate} locationStatus={locationStatus} onSave={saveProfile} />
+          <FisherProfile context={context} onChange={updateContext} onLocate={locate} locationStatus={locationStatus} onSave={saveProfile} isLocating={isLocating} />
         </section>
       </div>
     </main>

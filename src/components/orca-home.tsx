@@ -1,10 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type KeyboardEvent } from "react";
 import { useChat } from "@ai-sdk/react";
 import Link from "next/link";
-import { Fish, Send, Settings2, Square, UserRound } from "lucide-react";
+import { ArrowUp, Fish, Settings2, Square, UserRound } from "lucide-react";
 import {
   Conversation,
   ConversationContent,
@@ -196,6 +196,8 @@ function MessageView({ message, language }: { message: UIMessage; language: stri
 export default function OrcaHome() {
   const [context, setContext] = useState<FisherContext>(DEFAULT_FISHER_CONTEXT);
   const [screen, setScreen] = useState<HomeScreen>("launch");
+  const [draftMessage, setDraftMessage] = useState("");
+  const [isMultiLine, setIsMultiLine] = useState(false);
 
   useEffect(() => {
     const loadProfile = window.setTimeout(() => {
@@ -221,8 +223,32 @@ export default function OrcaHome() {
   const decision = useMemo(() => decisionFromMessages(messages), [messages]);
   const isWorking = status === "submitted" || status === "streaming";
 
-  const ask = (text: string) => {
-    if (status === "ready" && text.trim()) sendMessage({ text: text.trim() });
+  const ask = (text: string): boolean => {
+    if (status !== "ready" || !text.trim()) return false;
+    sendMessage({ text: text.trim() });
+    return true;
+  };
+
+  const submitDraft = () => {
+    if (ask(draftMessage)) {
+      setDraftMessage("");
+      setIsMultiLine(false);
+    }
+  };
+
+  const handleDraftChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    const value = event.target.value;
+    setDraftMessage(value);
+    event.target.style.height = "auto";
+    event.target.style.height = `${Math.min(event.target.scrollHeight, 180)}px`;
+    setIsMultiLine(value.includes("\n") || value.length > 60);
+  };
+
+  const handleDraftKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      submitDraft();
+    }
   };
 
   const completeOnboarding = (next: FisherContext) => {
@@ -254,10 +280,13 @@ export default function OrcaHome() {
               <Conversation className="message-list" aria-label="Orca fishing conversation"><ConversationContent className="message-content">{messages.map((message) => <MessageView key={message.id} message={message} language={context.language} />)}</ConversationContent><ConversationScrollButton /></Conversation>
             )}
             {error && <p className="location-status" role="alert">The fishing desk is unavailable right now. Please try again in a moment.</p>}
-            <form className="chat-form chat-composer" onSubmit={(event) => { event.preventDefault(); const input = event.currentTarget.elements.namedItem("message"); if (!(input instanceof HTMLTextAreaElement)) return; const value = input.value; if (!isWorking) { ask(value); input.value = ""; } }}>
-              <textarea className="chat-input" name="message" aria-label="Message Orca" placeholder="Ask Orca about the water…" rows={1} disabled={isWorking} />
-              <VoiceControl apiUrl={API_URL} language={context.language} disabled={isWorking} onTranscript={ask} />
-              {isWorking ? <button type="button" className="stop-button" onClick={() => stop()} aria-label="Stop response"><Square size={16} strokeWidth={2.1} /></button> : <button type="submit" className="send-button" disabled={status !== "ready"} aria-label="Send message"><span className="send-label">Send brief</span><Send size={17} strokeWidth={2.1} /></button>}
+            <form className="chat-form chat-composer" onSubmit={(event) => { event.preventDefault(); submitDraft(); }}>
+              <div className={`composer-shell${isMultiLine ? " composer-shell--multiline" : ""}`}>
+                <textarea className="chat-input" name="message" aria-label="Message Orca" placeholder="Ask Orca about the water…" rows={1} value={draftMessage} onChange={handleDraftChange} onKeyDown={handleDraftKeyDown} disabled={isWorking} />
+                <div className="composer-right-rail">
+                  {isWorking ? <button type="button" className="stop-button" onClick={() => stop()} aria-label="Stop response"><Square size={13} strokeWidth={2.2} /></button> : draftMessage.trim() ? <button type="submit" className="send-button" disabled={status !== "ready"} aria-label="Send message"><span className="send-label">Send brief</span><ArrowUp size={14} strokeWidth={2.4} /></button> : <VoiceControl apiUrl={API_URL} language={context.language} disabled={isWorking} onTranscript={ask} />}
+                </div>
+              </div>
             </form>
           </div>
         </section>

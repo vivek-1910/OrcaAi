@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { LoaderCircle, Mic, RotateCcw, Volume2 } from "lucide-react";
+import { LoaderCircle, Mic, RotateCcw, Volume2, X } from "lucide-react";
 
 type VoiceControlProps = {
   apiUrl: string;
@@ -142,12 +142,25 @@ export function VoiceControl({ apiUrl, language, disabled, onTranscript }: Voice
 
   return (
     <div className="voice-control">
-      <button type="button" className={`control-button ${active ? "is-active" : ""}`} onClick={active ? stop : () => void start()} disabled={disabled} aria-pressed={active}>
+      <button type="button" className={`control-button ${active ? "is-active" : ""}`} onClick={active ? stop : () => void start()} disabled={disabled} aria-pressed={active} aria-label={active ? "Stop voice input" : "Start voice input"}>
         <span className="control-icon" aria-hidden="true"><Mic size={15} strokeWidth={1.9} /></span>
         <strong>{active ? "Stop voice" : "Voice brief"}</strong>
         <span>{status}</span>
       </button>
       {interim && <p className="voice-interim" aria-live="polite">“{interim}”</p>}
+      {active && (
+        <div className="voice-listening-overlay" role="dialog" aria-label="Voice input is active" onClick={stop}>
+          <div className="voice-listening-panel" onClick={(event) => event.stopPropagation()}>
+            <div className="voice-listening-orbit" aria-hidden="true">
+              <span className="voice-wave-bars">{Array.from({ length: 7 }, (_, index) => <i key={index} />)}</span>
+              <span className="voice-listening-mic"><Mic size={28} strokeWidth={1.7} /></span>
+            </div>
+            <strong>{status.startsWith("Hearing") ? "Hearing you…" : "Listening…"}</strong>
+            <span>Tap anywhere to stop</span>
+            <button type="button" className="voice-listening-close" onClick={stop} aria-label="Stop voice input"><X size={17} strokeWidth={2} /></button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,8 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useChat } from "@ai-sdk/react";
-import { Fish, LocateFixed, UserRound, Waves } from "lucide-react";
+import Link from "next/link";
+import { Fish, Send, Settings2, Square, UserRound } from "lucide-react";
 import {
   Conversation,
   ConversationContent,
@@ -22,7 +24,6 @@ import {
   ToolOutput,
   type ToolPart,
 } from "@/components/ai-elements/tool";
-import FisherProfile from "@/components/fisher-profile";
 import FisherOnboarding from "@/components/fisher-onboarding";
 import OrcaLaunch from "@/components/orca-launch";
 import {
@@ -46,9 +47,9 @@ const API_URL = process.env.NEXT_PUBLIC_ORCA_API_URL ?? "http://localhost:3001/v
 type HomeScreen = "launch" | "onboarding" | "chat";
 
 const starterPrompts = [
-  "Give me a fishing brief for my next trip",
-  "What are the current conditions near my water?",
-  "Tell me if I should go fishing today",
+  "Can I go fishing today?",
+  "Check the sea near my harbour",
+  "Find my best fishing window",
   "What should I prepare before leaving?",
 ];
 
@@ -195,8 +196,6 @@ function MessageView({ message, language }: { message: UIMessage; language: stri
 export default function OrcaHome() {
   const [context, setContext] = useState<FisherContext>(DEFAULT_FISHER_CONTEXT);
   const [screen, setScreen] = useState<HomeScreen>("launch");
-  const [hydrated, setHydrated] = useState(false);
-  const [locationStatus, setLocationStatus] = useState("");
 
   useEffect(() => {
     const loadProfile = window.setTimeout(() => {
@@ -205,10 +204,10 @@ export default function OrcaHome() {
         try {
           setContext(mergeFisherContext(JSON.parse(stored)));
         } catch {
-          setLocationStatus("The saved profile could not be read; starting fresh.");
+          // Keep the safe defaults when an old or invalid profile is present.
         }
       }
-      setHydrated(true);
+      if (new URLSearchParams(window.location.search).get("screen") === "chat") setScreen("chat");
     }, 0);
 
     return () => window.clearTimeout(loadProfile);
@@ -221,31 +220,6 @@ export default function OrcaHome() {
   const { messages, sendMessage, status, error, stop } = useChat<UIMessage>({ transport, throttle: 50 });
   const decision = useMemo(() => decisionFromMessages(messages), [messages]);
   const isWorking = status === "submitted" || status === "streaming";
-
-  const updateContext = (next: FisherContext) => {
-    setContext(next);
-    if (hydrated) window.localStorage.setItem(FISHER_PROFILE_STORAGE_KEY, JSON.stringify(next));
-  };
-
-  const saveProfile = () => {
-    window.localStorage.setItem(FISHER_PROFILE_STORAGE_KEY, JSON.stringify(context));
-  };
-
-  const locate = () => {
-    if (!navigator.geolocation) {
-      setLocationStatus("Location is unavailable here. Enter a harbour or waterbody instead.");
-      return;
-    }
-    setLocationStatus("Requesting your location…");
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        updateContext({ ...context, location: { source: "permission", label: "Current fishing location", latitude: coords.latitude, longitude: coords.longitude } });
-        setLocationStatus("Using your current location. It is sent only when you ask Orca for a brief.");
-      },
-      () => setLocationStatus("Location was not shared. Add a harbour or waterbody manually."),
-      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 300_000 },
-    );
-  };
 
   const ask = (text: string) => {
     if (status === "ready" && text.trim()) sendMessage({ text: text.trim() });
@@ -261,43 +235,32 @@ export default function OrcaHome() {
   if (screen === "onboarding") return <FisherOnboarding initialContext={context} onBack={() => setScreen("launch")} onComplete={completeOnboarding} />;
 
   return (
-    <main className="orca-shell">
-      <div className="orca-frame">
-        <header className="topbar">
-          <a className="brand" href="#top" aria-label="Orca.ai home"><span className="brand-mark"><Fish size={21} strokeWidth={1.8} /></span><span><span className="brand-name">orca<span className="brand-name-dot">.ai</span></span><span className="brand-kicker">field intelligence for fishers</span></span></a>
-          <span className="topbar-note"><span className="status-dot" /> Your water. Your call.</span>
+    <main className="chat-page">
+      <div className="chat-board">
+        <header className="chat-board-nav">
+          <Link className="chat-brand" href="#top" aria-label="Orca.ai home">
+            <span className="chat-brand-mark"><Fish size={22} strokeWidth={1.8} /></span>
+            <strong>orca<span>.ai</span></strong>
+          </Link>
+          <Link className="chat-settings-link" href="/settings" aria-label="Open settings"><Settings2 size={16} strokeWidth={1.9} /><span>Settings</span></Link>
         </header>
 
-        <section className="hero" id="top">
-          <div><span className="eyebrow">Before you cast</span><h1>Know the water.<br /><span>Choose the moment.</span></h1><p className="hero-copy">Orca combines your fishing context with live tools and trusted evidence to create one clear brief for the water ahead.</p></div>
-          <div className="hero-note"><span className="section-label">Built for the bank and the bow</span><p>Marine or inland. Shore or vessel. Ask naturally and Orca activates the right fishing workflow for your location.</p></div>
+        <section className="chat-interface" id="top" aria-label="Orca.ai fishing chat">
+          <div className="chat-body">
+            {messages.length > 0 && <FishingDecisionCard decision={decision} />}
+            {messages.length === 0 ? (
+              <div className="empty-chat"><div className="empty-chat-visual" aria-hidden="true"><Image src="/images/orca-launch-hero-transparent.png" alt="" fill sizes="220px" /></div><h3>What are you seeing on the water?</h3><p>Ask Orca about your next fishing window. Start with a suggestion or write your own question.</p><div className="prompt-grid">{starterPrompts.map((prompt) => <button type="button" className="prompt-button" key={prompt} onClick={() => ask(prompt)} disabled={isWorking}>{prompt}</button>)}</div></div>
+            ) : (
+              <Conversation className="message-list" aria-label="Orca fishing conversation"><ConversationContent className="message-content">{messages.map((message) => <MessageView key={message.id} message={message} language={context.language} />)}</ConversationContent><ConversationScrollButton /></Conversation>
+            )}
+            {error && <p className="location-status" role="alert">The fishing desk is unavailable right now. Please try again in a moment.</p>}
+            <form className="chat-form chat-composer" onSubmit={(event) => { event.preventDefault(); const input = event.currentTarget.elements.namedItem("message"); if (!(input instanceof HTMLTextAreaElement)) return; const value = input.value; if (!isWorking) { ask(value); input.value = ""; } }}>
+              <textarea className="chat-input" name="message" aria-label="Message Orca" placeholder="Ask Orca about the water…" rows={1} disabled={isWorking} />
+              <VoiceControl apiUrl={API_URL} language={context.language} disabled={isWorking} onTranscript={ask} />
+              {isWorking ? <button type="button" className="stop-button" onClick={() => stop()} aria-label="Stop response"><Square size={16} strokeWidth={2.1} /></button> : <button type="submit" className="send-button" disabled={status !== "ready"} aria-label="Send message"><span className="send-label">Send brief</span><Send size={17} strokeWidth={2.1} /></button>}
+            </form>
+          </div>
         </section>
-
-        <div className="workspace">
-          <section className="card chat-card" aria-labelledby="chat-title">
-            <div className="chat-header"><div className="chat-title"><span className="agent-avatar" aria-hidden="true"><Fish size={20} strokeWidth={1.8} /></span><div><h2 id="chat-title">Orca fishing desk</h2><p>Ask for conditions, a brief, or a straight go / wait call.</p></div></div><span className={`status-pill ${isWorking ? "is-working" : ""}`}><span className="status-dot" />{isWorking ? "Working" : "Ready"}</span></div>
-            <div className="chat-body">
-              <FishingDecisionCard decision={decision} />
-              {messages.length === 0 ? (
-                <div className="empty-chat"><span className="empty-chat-mark" aria-hidden="true"><Waves size={26} strokeWidth={1.7} /></span><h3>What are you seeing on the water?</h3><p>Tell Orca where and when you fish. The agent will activate relevant tools, show evidence and return a conservative fishing decision.</p><div className="prompt-grid">{starterPrompts.map((prompt) => <button type="button" className="prompt-button" key={prompt} onClick={() => ask(prompt)} disabled={isWorking}>{prompt}</button>)}</div></div>
-              ) : (
-                <Conversation className="message-list" aria-label="Orca fishing conversation"><ConversationContent className="message-content">{messages.map((message) => <MessageView key={message.id} message={message} language={context.language} />)}</ConversationContent><ConversationScrollButton /></Conversation>
-              )}
-              {error && <p className="location-status" role="alert">The fishing desk could not connect: {error.message}. Check that the Fastify server is running on port 3001.</p>}
-              <form className="chat-form" onSubmit={(event) => { event.preventDefault(); const input = event.currentTarget.elements.namedItem("message"); if (!(input instanceof HTMLTextAreaElement)) return; const value = input.value; if (!isWorking) { ask(value); input.value = ""; } }}>
-                <textarea className="chat-input" name="message" aria-label="Message Orca" placeholder="Ask about your next fishing window…" rows={1} disabled={isWorking} />
-                <VoiceControl apiUrl={API_URL} language={context.language} disabled={isWorking} onTranscript={ask} />
-                {isWorking ? <button type="button" className="stop-button" onClick={() => stop()}>Stop</button> : <button type="submit" className="send-button" disabled={status !== "ready"}>Send brief</button>}
-              </form>
-            </div>
-          </section>
-
-          <aside className="sidebar">
-            <FisherProfile context={context} onChange={updateContext} onLocate={locate} locationStatus={locationStatus} onSave={saveProfile} />
-            <section className="card side-card" aria-labelledby="controls-title"><span className="eyebrow">Field controls</span><h2 id="controls-title">Ready for the water</h2><p className="side-card-intro">Set the context once. Every question can then use the right location, water type and vessel details.</p><button type="button" className="control-button" onClick={locate}><span className="control-icon"><LocateFixed size={18} strokeWidth={1.9} /></span><strong>Location</strong><span>{context.location.source === "permission" ? "Current location set" : "Permission or manual"}</span></button><p className="control-note">Orca checks each brief against the profile you set above.</p></section>
-          </aside>
-        </div>
-
       </div>
     </main>
   );

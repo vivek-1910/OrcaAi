@@ -612,23 +612,17 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .chat-interface .chat-composer { right: 17px; bottom: 14px; left: 17px; width: auto; transform: none; }
 }
 
-/* Voice feedback follows the active-mic modal pattern from Kobie */
-.voice-listening-overlay { position: fixed; z-index: 80; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(239, 249, 251, 0.66); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); animation: voice-overlay-in 180ms ease both; }
-.voice-listening-panel { position: relative; display: flex; width: min(300px, 100%); min-height: 300px; align-items: center; flex-direction: column; justify-content: center; gap: 10px; padding: 28px; border: 1px solid #cfe8ef; border-radius: 30px; background: rgba(255, 255, 255, 0.9); box-shadow: 0 24px 70px rgba(7, 83, 111, 0.18); }
-.voice-listening-orbit { position: relative; display: grid; width: 150px; height: 150px; place-items: center; border: 1px solid rgba(11, 125, 159, 0.28); border-radius: 50%; background: radial-gradient(circle, #e8f8fb 0%, #fff 66%); box-shadow: 0 0 0 16px rgba(225, 244, 248, 0.72), 0 0 0 30px rgba(225, 244, 248, 0.33); animation: voice-orbit-pulse 2.2s ease-in-out infinite; }
-.voice-listening-mic { display: grid; width: 64px; height: 64px; place-items: center; border-radius: 50%; background: var(--teal-dark); color: #fff; box-shadow: 0 10px 23px rgba(6, 76, 107, 0.22); }
-.voice-wave-bars { position: absolute; display: flex; height: 62px; align-items: center; gap: 5px; }
-.voice-wave-bars i { display: block; width: 3px; height: 15px; border-radius: 99px; background: var(--teal); animation: voice-bar 900ms ease-in-out infinite; }
-.voice-wave-bars i:nth-child(2), .voice-wave-bars i:nth-child(6) { animation-delay: 100ms; }
-.voice-wave-bars i:nth-child(3), .voice-wave-bars i:nth-child(5) { animation-delay: 200ms; }
-.voice-wave-bars i:nth-child(4) { animation-delay: 300ms; }
-.voice-listening-panel > strong { color: var(--ink); font-size: 14px; }
-.voice-listening-panel > span { color: var(--muted); font-size: 10px; }
-.voice-listening-close { display: grid; width: 34px; height: 34px; margin-top: 7px; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: #fff; color: var(--muted); }
-.voice-listening-close:hover { border-color: var(--teal); background: var(--teal-soft); color: var(--teal-dark); }
-@keyframes voice-overlay-in { from { opacity: 0; } to { opacity: 1; } }
-@keyframes voice-orbit-pulse { 0%, 100% { transform: scale(0.98); } 50% { transform: scale(1.02); } }
-@keyframes voice-bar { 0%, 100% { height: 15px; opacity: 0.45; } 50% { height: 48px; opacity: 1; } }
+/* Voice feedback mirrors Kobie's bottom-left strands animation. */
+.voice-listening-overlay { position: fixed; z-index: 99999; inset: 0; display: flex; align-items: flex-end; justify-content: flex-start; padding: 32px; background: rgba(15, 23, 42, 0.04); backdrop-filter: blur(1px); -webkit-backdrop-filter: blur(1px); animation: voice-overlay-in 300ms cubic-bezier(0.16, 1, 0.3, 1); }
+.voice-strands-shell { position: relative; width: 272px; height: 272px; margin-bottom: -32px; cursor: pointer; }
+.voice-strands-container { position: relative; width: 100%; height: 100%; overflow: visible; background: transparent; }
+.voice-strands-container canvas { display: block; width: 100%; height: 100%; }
+@keyframes voice-overlay-in { from { opacity: 0; backdrop-filter: blur(0); } to { opacity: 1; backdrop-filter: blur(1px); } }
+
+@media (max-width: 600px) {
+  .voice-listening-overlay { padding: 16px; }
+  .voice-strands-shell { width: min(272px, calc(100vw - 32px)); height: min(272px, calc(100vw - 32px)); margin-bottom: -16px; }
+}
 
 /* Match Kobie's floating composer geometry: the form is only the positioning
    layer, while the inner shell owns the border, radius, padding, and controls. */

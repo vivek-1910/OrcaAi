@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { LoaderCircle, Mic, RotateCcw, Volume2, X } from "lucide-react";
+import { LoaderCircle, Mic, RotateCcw, Volume2 } from "lucide-react";
+import VoiceStrands from "@/components/voice-strands";
 
 type VoiceControlProps = {
   apiUrl: string;
@@ -150,14 +151,28 @@ export function VoiceControl({ apiUrl, language, disabled, onTranscript }: Voice
       {interim && <p className="voice-interim" aria-live="polite">“{interim}”</p>}
       {active && (
         <div className="voice-listening-overlay" role="dialog" aria-label="Voice input is active" onClick={stop}>
-          <div className="voice-listening-panel" onClick={(event) => event.stopPropagation()}>
-            <div className="voice-listening-orbit" aria-hidden="true">
-              <span className="voice-wave-bars">{Array.from({ length: 7 }, (_, index) => <i key={index} />)}</span>
-              <span className="voice-listening-mic"><Mic size={28} strokeWidth={1.7} /></span>
-            </div>
-            <strong>{status.startsWith("Hearing") ? "Hearing you…" : "Listening…"}</strong>
-            <span>Tap anywhere to stop</span>
-            <button type="button" className="voice-listening-close" onClick={stop} aria-label="Stop voice input"><X size={17} strokeWidth={2} /></button>
+          <div className="voice-strands-shell" onClick={(event) => event.stopPropagation()}>
+            <VoiceStrands
+              colors={["#F97316", "#7C3AED", "#06B6D4"]}
+              count={3}
+              speed={0.5}
+              amplitude={1.18}
+              waviness={1}
+              thickness={0.7}
+              glow={2.05}
+              taper={3}
+              spread={1}
+              intensity={0.6}
+              saturation={2}
+              opacity={1}
+              scale={1.5}
+              glass={false}
+              refraction={1}
+              dispersion={1}
+              glassSize={1}
+              hueShift={0}
+              style={{ width: "100%", height: "100%" }}
+            />
           </div>
         </div>
       )}

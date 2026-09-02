@@ -39,6 +39,21 @@ const currentTimeMs = () => Date.now();
 
 type HomeScreen = "launch" | "onboarding" | "chat";
 
+function updateScreenUrl(screen: HomeScreen): void {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  if (screen === "launch") url.searchParams.delete("screen");
+  else url.searchParams.set("screen", screen);
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+}
+
+function hasSavedFisherProfile(value: unknown): boolean {
+  const saved = mergeFisherContext(value);
+  return saved.location.source !== "unset"
+    && saved.location.label.trim().length > 0
+    && saved.location.label !== "Add a harbour or waterbody";
+}
+
 type FishingAssessmentSnapshot = {
   decision: "GO" | "CAUTION" | "NO_GO" | "UNKNOWN";
   title?: string;
@@ -260,9 +275,12 @@ export default function OrcaHome() {
   useEffect(() => {
     const loadProfile = window.setTimeout(() => {
       const stored = window.localStorage.getItem(FISHER_PROFILE_STORAGE_KEY);
+      let savedProfile = false;
       if (stored) {
         try {
-          setContext(mergeFisherContext(JSON.parse(stored)));
+          const parsedProfile: unknown = JSON.parse(stored);
+          setContext(mergeFisherContext(parsedProfile));
+          savedProfile = hasSavedFisherProfile(parsedProfile);
         } catch {
           // Keep the safe defaults when an old or invalid profile is present.
         }
@@ -276,7 +294,14 @@ export default function OrcaHome() {
       setActiveChatId(nextActiveChatId);
       setSidebarCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "true");
       setHistoryReady(true);
-      if (new URLSearchParams(window.location.search).get("screen") === "chat") setScreen("chat");
+      const requestedScreen = new URLSearchParams(window.location.search).get("screen");
+      const nextScreen: HomeScreen = requestedScreen === "onboarding"
+        ? "onboarding"
+        : requestedScreen === "chat" || savedProfile
+          ? "chat"
+          : "launch";
+      setScreen(nextScreen);
+      if (nextScreen !== "launch") updateScreenUrl(nextScreen);
     }, 0);
 
     return () => window.clearTimeout(loadProfile);
@@ -413,11 +438,13 @@ export default function OrcaHome() {
   const completeOnboarding = (next: FisherContext) => {
     setContext(next);
     window.localStorage.setItem(FISHER_PROFILE_STORAGE_KEY, JSON.stringify(next));
+    updateScreenUrl("chat");
     setScreen("chat");
   };
 
-  if (screen === "launch") return <OrcaLaunch onNext={() => setScreen("onboarding")} />;
-  if (screen === "onboarding") return <FisherOnboarding initialContext={context} onBack={() => setScreen("launch")} onComplete={completeOnboarding} />;
+  if (!historyReady) return <main className="app-loading-screen" aria-label="Loading Orca.ai"><span>orca<span>.ai</span></span></main>;
+  if (screen === "launch") return <OrcaLaunch onNext={() => { updateScreenUrl("onboarding"); setScreen("onboarding"); }} />;
+  if (screen === "onboarding") return <FisherOnboarding initialContext={context} onBack={() => { updateScreenUrl("launch"); setScreen("launch"); }} onComplete={completeOnboarding} />;
 
   return (
     <main className="chat-page">

@@ -500,6 +500,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .settings-intro p { max-width: 520px; margin: 14px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
 .settings-card { width: min(760px, calc(100% - 48px)); margin: 0 auto; padding: clamp(24px, 4vw, 42px); border: 1px solid var(--line); border-radius: 30px; background: #fff; box-shadow: 0 24px 68px rgba(12, 91, 116, 0.1); }
 .settings-card > .side-card { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.app-loading-screen { display: grid; min-height: 100svh; place-items: center; background: #fff; color: var(--teal-dark); font-size: 18px; font-weight: 850; letter-spacing: -0.06em; }
+.app-loading-screen span span { color: var(--teal); }
+.settings-reset { display: flex; width: min(760px, calc(100% - 48px)); align-items: center; justify-content: space-between; gap: 24px; margin: 18px auto 0; padding: 18px 20px; border: 1px solid #f1d9d1; border-radius: 18px; background: #fffaf8; }
+.settings-reset h2 { margin: 5px 0 3px; color: var(--ink); font-size: 15px; letter-spacing: -0.035em; }
+.settings-reset p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.settings-reset-button { display: inline-flex; min-height: 38px; flex: 0 0 auto; align-items: center; gap: 7px; padding: 0 12px; border: 1px solid #e9bbae; border-radius: 10px; background: #fff1ec; color: #b65542; font-size: 11px; font-weight: 800; transition: background 140ms ease, border-color 140ms ease, transform 140ms ease; }
+.settings-reset-button:hover { border-color: #d98f7e; background: #ffe5dc; transform: translateY(-1px); }
 
 @media (max-width: 900px) {
   .chat-board, .settings-board { min-height: calc(100svh - 24px); border-radius: 30px; }
@@ -531,6 +538,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .settings-intro { width: calc(100% - 34px); margin: 55px auto 25px; }
   .settings-intro h1 { font-size: 40px; }
   .settings-card { width: calc(100% - 28px); padding: 21px 17px; border-radius: 23px; box-shadow: 0 18px 50px rgba(12, 91, 116, 0.09); }
+  .settings-reset { width: calc(100% - 28px); align-items: flex-start; flex-direction: column; gap: 14px; padding: 17px; }
+  .settings-reset-button { width: 100%; justify-content: center; }
 }
 
 /* Chat workspace: quiet chrome with one floating composer */

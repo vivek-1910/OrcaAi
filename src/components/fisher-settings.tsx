@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Fish, Settings2 } from "lucide-react";
+import { ArrowLeft, Fish, Settings2, Trash2 } from "lucide-react";
 import FisherProfile from "@/components/fisher-profile";
 import { locationErrorMessage, requestBrowserLocation } from "@/lib/browser-location";
 import {
@@ -11,6 +11,36 @@ import {
   mergeFisherContext,
   type FisherContext,
 } from "@/lib/fisher-context";
+
+function deleteIndexedDatabase(name: string): Promise<void> {
+  return new Promise((resolve) => {
+    const request = window.indexedDB.deleteDatabase(name);
+    request.onsuccess = () => resolve();
+    request.onerror = () => resolve();
+    request.onblocked = () => resolve();
+  });
+}
+
+async function resetWebsiteData(): Promise<void> {
+  if (!window.confirm("Reset Orca.ai and delete this website's saved profile and chat history?")) return;
+
+  try {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+
+    if (typeof window.indexedDB?.databases === "function") {
+      const databases = await window.indexedDB.databases();
+      await Promise.all(databases.flatMap((database) => database.name ? [deleteIndexedDatabase(database.name)] : []));
+    }
+
+    if ("caches" in window) {
+      const cacheNames = await window.caches.keys();
+      await Promise.all(cacheNames.map((name) => window.caches.delete(name)));
+    }
+  } finally {
+    window.location.replace("/");
+  }
+}
 
 export default function FisherSettings() {
   const [context, setContext] = useState<FisherContext>(DEFAULT_FISHER_CONTEXT);
@@ -77,6 +107,15 @@ export default function FisherSettings() {
 
         <section className="settings-card" aria-label="Fishing profile settings">
           <FisherProfile context={context} onChange={updateContext} onLocate={locate} locationStatus={locationStatus} onSave={saveProfile} isLocating={isLocating} />
+        </section>
+
+        <section className="settings-reset" aria-labelledby="settings-reset-title">
+          <div>
+            <span className="settings-kicker">Start over</span>
+            <h2 id="settings-reset-title">Reset this website</h2>
+            <p>Clear your saved fishing profile and local chat history from this browser.</p>
+          </div>
+          <button type="button" className="settings-reset-button" onClick={() => void resetWebsiteData()}><Trash2 size={15} strokeWidth={1.9} /> Reset website</button>
         </section>
       </div>
     </main>

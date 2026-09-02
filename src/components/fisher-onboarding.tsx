@@ -33,6 +33,14 @@ function hasLocation(context: FisherContext): boolean {
     && context.location.label !== "Add a harbour or waterbody";
 }
 
+function hasInvalidTripWindow(context: FisherContext): boolean {
+  if (!context.departureAt || !context.returnAt) return false;
+
+  const departureAt = Date.parse(context.departureAt);
+  const returnAt = Date.parse(context.returnAt);
+  return !Number.isFinite(departureAt) || !Number.isFinite(returnAt) || returnAt <= departureAt;
+}
+
 export default function FisherOnboarding({ initialContext, onBack, onComplete }: FisherOnboardingProps) {
   const [draft, setDraft] = useState<FisherContext>(initialContext);
   const [step, setStep] = useState(1);
@@ -42,6 +50,10 @@ export default function FisherOnboarding({ initialContext, onBack, onComplete }:
 
   const update = (patch: Partial<FisherContext>) => setDraft((current) => ({ ...current, ...patch }));
   const updateVessel = (patch: Partial<FisherContext["vessel"]>) => setDraft((current) => ({ ...current, vessel: { ...current.vessel, ...patch } }));
+  const updateTripTime = (field: "departureAt" | "returnAt", value: string | undefined) => {
+    setError("");
+    setDraft((current) => ({ ...current, [field]: value }));
+  };
 
   const requestLocation = () => {
     if (!navigator.geolocation) {
@@ -71,6 +83,10 @@ export default function FisherOnboarding({ initialContext, onBack, onComplete }:
   const goNext = () => {
     if (step === 2 && !hasLocation(draft)) {
       setError("Add a harbour, waterbody, or share your current location to continue.");
+      return;
+    }
+    if (step === totalSteps && hasInvalidTripWindow(draft)) {
+      setError("Expected return must be after planned departure.");
       return;
     }
     setError("");
@@ -173,9 +189,10 @@ export default function FisherOnboarding({ initialContext, onBack, onComplete }:
                 <label className="onboarding-field"><span className="input-label">Preferred language</span><OrcaSelect ariaLabel="Preferred language" value={draft.language} options={languageOptions.map((language) => ({ value: language, label: language }))} onValueChange={(value) => update({ language: value })} /></label>
                 <div className="onboarding-field"><span className="input-label">Usual trip timing</span><div className="timing-grid">{([ ["early-morning", "Early morning", "Before the first light"], ["day", "Day trip", "Out with the sun"], ["evening", "Evening", "Late water, long shadows"], ["overnight", "Overnight", "For the longer run"] ] as Array<[TripTiming, string, string]>).map(([value, title, detail]) => <button type="button" key={value} className={`timing-choice ${draft.tripTiming === value ? "is-selected" : ""}`} onClick={() => update({ tripTiming: value })} aria-pressed={draft.tripTiming === value}><Clock3 size={16} strokeWidth={1.8} aria-hidden="true" /><strong>{title}</strong><small>{detail}</small></button>)}</div></div>
                 <div className="onboarding-form-row onboarding-date-row">
-                  <div className="onboarding-field"><span className="input-label">Planned departure</span><OrcaDateTimePicker id="departure-at" label="Planned departure" value={draft.departureAt} onChange={(value) => update({ departureAt: value })} /></div>
-                  <div className="onboarding-field"><span className="input-label">Expected return</span><OrcaDateTimePicker id="return-at" label="Expected return" value={draft.returnAt} onChange={(value) => update({ returnAt: value })} /></div>
+                  <div className="onboarding-field"><span className="input-label">Planned departure</span><OrcaDateTimePicker id="departure-at" label="Planned departure" value={draft.departureAt} onChange={(value) => updateTripTime("departureAt", value)} /></div>
+                  <div className="onboarding-field"><span className="input-label">Expected return</span><OrcaDateTimePicker id="return-at" label="Expected return" value={draft.returnAt} onChange={(value) => updateTripTime("returnAt", value)} /></div>
                 </div>
+                {error && <p className="onboarding-error" role="alert">{error}</p>}
               </div>
             )}
           </div>

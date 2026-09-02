@@ -16,17 +16,10 @@ import {
   SourcesContent,
   SourcesTrigger,
 } from "@/components/ai-elements/sources";
-import {
-  Tool,
-  ToolContent,
-  ToolHeader,
-  ToolInput,
-  ToolOutput,
-  type ToolPart,
-} from "@/components/ai-elements/tool";
 import FisherOnboarding from "@/components/fisher-onboarding";
 import OrcaLaunch from "@/components/orca-launch";
 import ChatHistorySidebar, { type ChatHistoryItem } from "@/components/chat-history-sidebar";
+import AgentActivityTimeline from "@/components/agent-activity-timeline";
 import { MarkdownContent } from "@/components/markdown";
 import { SpeakResponseButton, VoiceControl } from "@/components/voice-control";
 import {
@@ -42,6 +35,7 @@ const CHAT_HISTORY_STORAGE_KEY = "orca:chat-history:v1";
 const ACTIVE_CHAT_STORAGE_KEY = "orca:active-chat:v1";
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "orca:chat-sidebar-collapsed:v1";
 const EMPTY_MESSAGES: UIMessage[] = [];
+const currentTimeMs = () => Date.now();
 
 type HomeScreen = "launch" | "onboarding" | "chat";
 
@@ -52,43 +46,8 @@ const starterPrompts = [
   "What should I prepare before leaving?",
 ];
 
-const toolNames: Record<string, string> = {
-  discover_skills: "Choosing the right fishing skill",
-  activate_skill: "Activating a fishing workflow",
-  assess_fishing_conditions: "Assessing fishing conditions",
-  get_imd_conditions: "Checking official IMD conditions",
-  get_ndma_alerts: "Checking official disaster alerts",
-  get_open_meteo_weather: "Checking local weather and wind",
-  get_open_meteo_marine: "Checking waves and swell",
-  get_incois_marine_data: "Checking INCOIS marine data",
-  get_fishing_restrictions_api: "Checking fishing restrictions",
-  search_trusted_fishing_sources: "Searching trusted fishing sources",
-  extract_trusted_source: "Reading trusted evidence",
-  get_nasa_climate_context: "Checking climate context",
-};
-
 function recordValue(value: unknown, key: string): unknown {
   return value && typeof value === "object" ? (value as Record<string, unknown>)[key] : undefined;
-}
-
-function toolName(part: unknown): string {
-  const type = String(recordValue(part, "type") ?? "");
-  const name = type === "dynamic-tool" ? String(recordValue(part, "toolName") ?? "agent tool") : type.replace(/^tool-/, "");
-  return toolNames[name] ?? name.replace(/[-_]/g, " ");
-}
-
-function ToolActivity({ part }: { part: unknown }) {
-  const toolPart = part as ToolPart;
-  const name = toolName(part);
-  return (
-    <Tool className="tool-card" defaultOpen={toolPart.state === "output-error"}>
-      <ToolHeader type="dynamic-tool" toolName={name} state={toolPart.state} title={name} />
-      <ToolContent>
-        {toolPart.input !== undefined && <ToolInput input={toolPart.input} />}
-        {(toolPart.output !== undefined || toolPart.errorText) && <ToolOutput output={toolPart.output} errorText={toolPart.errorText} />}
-      </ToolContent>
-    </Tool>
-  );
 }
 
 function collectEvidence(value: unknown, output: Array<{ url: string; title: string }>) {
@@ -199,7 +158,7 @@ function historyItem(chat: StoredChat): ChatHistoryItem {
   };
 }
 
-function MessageView({ message, language }: { message: UIMessage; language: string }) {
+function MessageView({ message, language, isWorking, elapsedMs }: { message: UIMessage; language: string; isWorking: boolean; elapsedMs: number }) {
   const isUser = message.role === "user";
   const text = messageText(message);
   const parts = message.parts as unknown[];
@@ -207,13 +166,16 @@ function MessageView({ message, language }: { message: UIMessage; language: stri
     const type = String(recordValue(part, "type") ?? "");
     return type === "dynamic-tool" || type.startsWith("tool-");
   });
+  const toolError = tools
+    .map((part) => recordValue(part, "errorText"))
+    .find((value): value is string => typeof value === "string" && value.trim().length > 0);
 
   return (
     <article className={`message ${isUser ? "user" : "assistant"}`}>
       <span className="message-avatar" aria-hidden="true">{isUser ? <UserRound size={14} strokeWidth={2} /> : <Fish size={16} strokeWidth={1.8} />}</span>
       <div className="message-bubble">
+        {!isUser && <AgentActivityTimeline parts={parts} isWorking={isWorking} elapsedMs={elapsedMs} error={toolError} placeholder={isWorking && tools.length === 0} />}
         {text && <MarkdownContent text={text} />}
-        {!isUser && tools.map((part, index) => <ToolActivity key={`${message.id}-tool-${index}`} part={part} />)}
         {!isUser && <SourceLinks parts={parts} outputs={tools.map((part) => recordValue(part, "output"))} />}
         {!isUser && text && <SpeakResponseButton apiUrl={API_URL} language={language} text={text} />}
       </div>
@@ -230,6 +192,9 @@ export default function OrcaHome() {
   const [activeChatId, setActiveChatId] = useState("new-chat");
   const [historyReady, setHistoryReady] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [requestStartedAt, setRequestStartedAt] = useState<number | null>(null);
+  const [requestElapsedMs, setRequestElapsedMs] = useState(0);
+  const [existingAssistantIds, setExistingAssistantIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const loadProfile = window.setTimeout(() => {
@@ -280,7 +245,8 @@ export default function OrcaHome() {
 
   const handleChatFinish = useCallback(({ messages: finishedMessages }: { messages: UIMessage[] }) => {
     saveConversation(activeChatId, finishedMessages);
-  }, [activeChatId, saveConversation]);
+    if (requestStartedAt) setRequestElapsedMs(Math.max(0, currentTimeMs() - requestStartedAt));
+  }, [activeChatId, requestStartedAt, saveConversation]);
 
   const activeConversation = conversations.find((conversation) => conversation.id === activeChatId);
   const { messages, sendMessage, status, error, stop } = useChat<UIMessage>({
@@ -293,6 +259,26 @@ export default function OrcaHome() {
   const isWorking = status === "submitted" || status === "streaming";
   const activeChatTitle = activeConversation?.title ?? "New fishing brief";
   const historyItems = useMemo(() => conversations.map(historyItem), [conversations]);
+  const activeAssistantMessageId = isWorking
+    ? [...messages].reverse().find((message) => message.role === "assistant" && !existingAssistantIds.has(message.id))?.id
+    : undefined;
+
+  useEffect(() => {
+    if (!isWorking || !requestStartedAt) return undefined;
+    const updateElapsed = () => {
+      const elapsed = Math.max(0, Date.now() - requestStartedAt);
+      setRequestElapsedMs(elapsed);
+    };
+    updateElapsed();
+    const timer = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(timer);
+  }, [isWorking, requestStartedAt]);
+
+  useEffect(() => {
+    if (!isWorking && requestStartedAt) {
+      setRequestElapsedMs(Math.max(0, Date.now() - requestStartedAt));
+    }
+  }, [isWorking, requestStartedAt]);
 
   useEffect(() => {
     if (!historyReady) return;
@@ -303,6 +289,9 @@ export default function OrcaHome() {
 
   const ask = (text: string): boolean => {
     if (status !== "ready" || !text.trim()) return false;
+    setExistingAssistantIds(new Set(messages.filter((message) => message.role === "assistant").map((message) => message.id)));
+    setRequestStartedAt(currentTimeMs());
+    setRequestElapsedMs(0);
     sendMessage({ text: text.trim() });
     return true;
   };
@@ -332,6 +321,8 @@ export default function OrcaHome() {
   const handleNewChat = () => {
     saveConversation(activeChatId, messages);
     stop();
+    setRequestStartedAt(null);
+    setRequestElapsedMs(0);
     setActiveChatId(createChatId());
     setDraftMessage("");
     setIsMultiLine(false);
@@ -341,6 +332,8 @@ export default function OrcaHome() {
     if (chatId === activeChatId) return;
     saveConversation(activeChatId, messages);
     stop();
+    setRequestStartedAt(null);
+    setRequestElapsedMs(0);
     setActiveChatId(chatId);
     setDraftMessage("");
     setIsMultiLine(false);
@@ -354,6 +347,8 @@ export default function OrcaHome() {
     setConversations(remaining);
     if (chatId === activeChatId) {
       stop();
+      setRequestStartedAt(null);
+      setRequestElapsedMs(0);
       setActiveChatId(remaining[0]?.id ?? createChatId());
       setDraftMessage("");
       setIsMultiLine(false);
@@ -404,7 +399,7 @@ export default function OrcaHome() {
                 {messages.length === 0 ? (
                   <div className="empty-chat"><div className="empty-chat-visual" aria-hidden="true"><Image src="/images/orca-launch-hero-transparent.png" alt="" fill sizes="220px" /></div><h3>What are you seeing on the water?</h3><p>Ask Orca about your next fishing window. Start with a suggestion or write your own question.</p><div className="prompt-grid">{starterPrompts.map((prompt) => <button type="button" className="prompt-button" key={prompt} onClick={() => ask(prompt)} disabled={isWorking}>{prompt}</button>)}</div></div>
                 ) : (
-                  <Conversation className="message-list" aria-label="Orca fishing conversation"><ConversationContent className="message-content">{messages.map((message) => <MessageView key={message.id} message={message} language={context.language} />)}</ConversationContent><ConversationScrollButton /></Conversation>
+                  <Conversation className="message-list" aria-label="Orca fishing conversation"><ConversationContent className="message-content">{messages.map((message) => <MessageView key={message.id} message={message} language={context.language} isWorking={message.id === activeAssistantMessageId} elapsedMs={requestElapsedMs} />)}{isWorking && !activeAssistantMessageId && <article className="message assistant activity-placeholder"><div className="message-bubble"><AgentActivityTimeline isWorking elapsedMs={requestElapsedMs} placeholder /></div></article>}</ConversationContent><ConversationScrollButton /></Conversation>
                 )}
                 {error && <p className="location-status" role="alert">The fishing desk is unavailable right now. Please try again in a moment.</p>}
                 <form className="chat-form chat-composer" onSubmit={(event) => { event.preventDefault(); submitDraft(); }}>

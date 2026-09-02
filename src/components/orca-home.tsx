@@ -26,12 +26,6 @@ import {
 } from "@/components/ai-elements/tool";
 import FisherOnboarding from "@/components/fisher-onboarding";
 import OrcaLaunch from "@/components/orca-launch";
-import {
-  DEFAULT_DECISION,
-  FishingDecisionCard,
-  type FishingDecision,
-  type FishingDecisionState,
-} from "@/components/fishing-decision";
 import { MarkdownContent } from "@/components/markdown";
 import { SpeakResponseButton, VoiceControl } from "@/components/voice-control";
 import {
@@ -70,45 +64,6 @@ const toolNames: Record<string, string> = {
 
 function recordValue(value: unknown, key: string): unknown {
   return value && typeof value === "object" ? (value as Record<string, unknown>)[key] : undefined;
-}
-
-function normalizeDecision(value: unknown): FishingDecision | null {
-  if (!value || typeof value !== "object") return null;
-  const item = value as Record<string, unknown>;
-  const raw = String(item.state ?? item.decision ?? item.status ?? "").toLowerCase();
-  const map: Record<string, FishingDecisionState> = {
-    go: "go",
-    green: "go",
-    safe: "go",
-    caution: "caution",
-    yellow: "caution",
-    wait: "wait",
-    unknown: "wait",
-    hold: "wait",
-    no_go: "avoid",
-    "no-go": "avoid",
-    avoid: "avoid",
-    red: "avoid",
-  };
-  const state = map[raw];
-  if (!state) return null;
-
-  return {
-    state,
-    title: String(item.title ?? item.headline ?? (state === "go" ? "Conditions support a trip" : state === "caution" ? "Go with a cautious plan" : state === "avoid" ? "Do not launch yet" : "Wait for a verified window")),
-    detail: String(item.detail ?? item.reason ?? item.summary ?? "The agent updated this decision from the latest available evidence."),
-    updated: item.updated ? String(item.updated) : item.generatedAt ? String(item.generatedAt) : "Updated by agent",
-  };
-}
-
-function decisionFromMessages(messages: UIMessage[]): FishingDecision {
-  for (const message of [...messages].reverse()) {
-    for (const part of [...message.parts].reverse()) {
-      const direct = normalizeDecision(recordValue(part, "data")) ?? normalizeDecision(recordValue(part, "output"));
-      if (direct) return direct;
-    }
-  }
-  return DEFAULT_DECISION;
 }
 
 function toolName(part: unknown): string {
@@ -220,7 +175,6 @@ export default function OrcaHome() {
     [context],
   );
   const { messages, sendMessage, status, error, stop } = useChat<UIMessage>({ transport, throttle: 50 });
-  const decision = useMemo(() => decisionFromMessages(messages), [messages]);
   const isWorking = status === "submitted" || status === "streaming";
 
   const ask = (text: string): boolean => {
@@ -273,7 +227,6 @@ export default function OrcaHome() {
 
         <section className="chat-interface" id="top" aria-label="Orca.ai fishing chat">
           <div className="chat-body">
-            {messages.length > 0 && <FishingDecisionCard decision={decision} />}
             {messages.length === 0 ? (
               <div className="empty-chat"><div className="empty-chat-visual" aria-hidden="true"><Image src="/images/orca-launch-hero-transparent.png" alt="" fill sizes="220px" /></div><h3>What are you seeing on the water?</h3><p>Ask Orca about your next fishing window. Start with a suggestion or write your own question.</p><div className="prompt-grid">{starterPrompts.map((prompt) => <button type="button" className="prompt-button" key={prompt} onClick={() => ask(prompt)} disabled={isWorking}>{prompt}</button>)}</div></div>
             ) : (
